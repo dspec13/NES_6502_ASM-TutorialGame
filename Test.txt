@@ -11,9 +11,12 @@
                                 ;; 2. Constants and Variables
                                     .enum $0000  ; This is the Zero Page
 00000                           
-00000                                   ; variables will eventually go here
-00000                           
-00000                               .ende
+00000                               ; variables will eventually go here
+00000                               playerY .dsb 1     ; playerX (sprite's x pos) is 1 byte in length
+00001                               playerX .dsb 1     ; playerY (sprite's y pos)
+00002                           
+00002                               frameTimer .dsb 1  ; declare frameTimer variablw
+00003                               .ende
                                 
                                 ;; 3. Set the starting point fot the code
                                     .org $C000  ; This starts the code at address $C000
@@ -41,7 +44,7 @@
 0C020                           
 0C020                               ;; CLEAR OUT MEMORY & STUFF HERE
 0C020 A9 00                         LDA #$00  ; Loads 0 into the accumulator
-0C022 A2 00                         LDX #$00  ; Loads 0 into the X register (X will increment through [0, 255])
+0C022 A2 00                         LDX #$00  ; Loads 0 into the X register (X will INCrement through [0, 255])
 0C024                           ClearMemoryLoop:
 0C024 95 00                         STA $0000, x  ; Stores the accumulator into addr $0000 + x
 0C026 9D 00 01                      STA $0100, x  ; Stores the accumulator into addr $0100 + x
@@ -66,65 +69,107 @@
 0C048 A9 1E                         LDA #%00011110  ; Loads this binary number into accumulator
 0C04A 8D 01 20                      STA $2001       ; Re-Enables rendering
 0C04D                           
-0C04D                               ;; At the end of RESET, jump to the Main Game Code
-0C04D 4C 6F C0                      JMP MainGameLoop
-0C050                           
-0C050                           
-0C050                           ;; 5. The NMI (Non-Maskable Interrupt): Happens at the end of every frame
-0C050                           ;;                                      When the game does its PPU updates
-0C050                           ;;                                      & prepares to draw the next frame.
-0C050                           NMI:
-0C050                               ;; Push A, X, & Y registers to the stack to preserve them
-0C050 48                            PHA  ; push accumulator to the stack
-0C051 8A                            TXA  ; A <= X
-0C052 48                            PHA
-0C053 98                            TYA  ; A <= Y
-0C054 48                            PHA  ; Stack in Descending Order: Y, X, A
-0C055                           
-0C055                               ;;===================
-0C055                               ;; DO NMI STUFF HERE
-0C055                               ;; Transfer sprites to PPU
-0C055 A5 00                         LDA $00
-0C057 8D 03 20                      STA $2003  ; sets the low byte of the sprite RAM address
-0C05A A9 02                         LDA #$02
-0C05C 8D 14 40                      STA $4014  ; sets high byte of the sprite RAM addr
-0C05F                                          ; sprite RAM addr: $0200 (16-bit addr)
-0C05F                           
-0C05F                               ;; Re-Enable Things
-0C05F A9 90                         LDA #%10010000  ; Re-Enable NMI
-0C061 8D 00 20                      STA $2000
-0C064 A9 1E                         LDA #%00011110  ; RE-Enables rendering
-0C066                           
-0C066 8D 01 20                      STA $2001
-0C069                               ;;===================
-0C069                           
-0C069                               ;; Pull Y, X, & A registers from the stack
-0C069 68                            PLA  ; Pull Y from stack and into the accumulator
-0C06A A8                            TAY  ; Y <= A = Y_old
-0C06B 68                            PLA
-0C06C AA                            TAX  ; X <= A = X_old
-0C06D 68                            PLA  ; A <= A_old
-0C06E                           
-0C06E                               ;; At the end of NMI, we want to "Return from Interrupt"
-0C06E 40                            RTI  ; returns back to the point in the code we were when the frame ended
-0C06F                           
-0C06F                           ;; 6. The Main Game Loop
-0C06F                           MainGameLoop:
-0C06F                               ;; This is where all game logic will go
-0C06F                           
-0C06F 4C 6F C0                      JMP MainGameLoop
-0C072                           
-0C072                           ;; 7. Sub Routines
-0C072                           
-0C072                           
-0C072                           ;; 8. Includes and data tables
-0C072                           
-0C072                           
-0C072                           
-0C072                           ;; 9. The Vectors (last few bytes of the ROM file)
-0C072                           ;;                Determine the location of: Reset, NMI, (& other interupts)
-0C072                           
-0C072 00 00 00 00 00 00 00 00..     .org $fffa  ; sets us up at the very end of the code.
-0FFFA 50 C0                         .dw NMI     ; NMI points to label NMI
+0C04D                               ;; Set Default value variable values
+0C04D A9 80                         LDA #$80
+0C04F 85 01                         STA playerX
+0C051 85 00                         STA playerY
+0C053                           
+0C053                               ;; At the end of RESET, jump to the Main Game Code
+0C053 4C 91 C0                      JMP MainGameLoop
+0C056                           
+0C056                           
+0C056                           ;; 5. The NMI (Non-Maskable Interrupt): Happens at the end of every frame
+0C056                           ;;                                      When the game does its PPU updates
+0C056                           ;;                                      & prepares to draw the next frame.
+0C056                           NMI:
+0C056                               ;; Push A, X, & Y registers to the stack to preserve them
+0C056 48                            PHA  ; push accumulator to the stack
+0C057 8A                            TXA  ; A <= X
+0C058 48                            PHA
+0C059 98                            TYA  ; A <= Y
+0C05A 48                            PHA  ; Stack in Descending Order: Y, X, A
+0C05B                           
+0C05B                               ;;===================
+0C05B                               ;; DO NMI STUFF HERE
+0C05B                           
+0C05B E6 02                         INC frameTimer  ; frameTimer++ every time NMI is hit
+0C05D                           
+0C05D                               ;; Transfer sprites to PPU
+0C05D A5 00                         LDA $00
+0C05F 8D 03 20                      STA $2003  ; sets the low byte of the sprite RAM address
+0C062 A9 02                         LDA #$02
+0C064 8D 14 40                      STA $4014  ; sets high byte of the sprite RAM addr
+0C067                                          ; sprite RAM addr: $0200 (16-bit addr)
+0C067                           
+0C067                               ;; load palattes (Palette tables are defined in Section 8)
+0C067 AD 02 20                      LDA $2002
+0C06A A9 3F                         LDA #$3F
+0C06C 8D 06 20                      STA $2006
+0C06F A9 00                         LDA #$00
+0C071 8D 06 20                      STA $2006
+0C074 A2 00                         LDX #$00
+0C076                           LoadPalettesLoop:
+0C076 BD A8 C0                      LDA MyPalettes, x    ; Load whatever value from the table that x equals
+0C079 8D 07 20                      STA $2007            ; Store it to the addr that handles palettes.
+0C07C E8                            INX                  ; X++
+0C07D E0 20                         CPX #$20             ; Compare X to 32 (8 banks * 4 colors)
+0C07F D0 F5                         BNE LoadPalettesLoop  ; Loop while X != 32
+0C081                           
+0C081                               ;; Re-Enable Things
+0C081 A9 90                         LDA #%10010000  ; Re-Enable NMI
+0C083 8D 00 20                      STA $2000
+0C086 A9 1E                         LDA #%00011110  ; RE-Enables rendering
+0C088                           
+0C088 8D 01 20                      STA $2001
+0C08B                               ;;===================
+0C08B                           
+0C08B                               ;; Pull Y, X, & A registers from the stack
+0C08B 68                            PLA  ; Pull Y from stack and into the accumulator
+0C08C A8                            TAY  ; Y <= A = Y_old
+0C08D 68                            PLA
+0C08E AA                            TAX  ; X <= A = X_old
+0C08F 68                            PLA  ; A <= A_old
+0C090                           
+0C090                               ;; At the end of NMI, we want to "Return from Interrupt"
+0C090 40                            RTI  ; returns back to the point in the code we were when the frame ended
+0C091                           
+0C091                           ;; 6. The Main Game Loop
+0C091                           MainGameLoop:
+0C091                               ;; Regulate Frames
+0C091 A5 02                         LDA frameTimer
+0C093                           CheckFrameTimer:
+0C093 C5 02                         CMP frameTimer       ; if frameTimer is the same...
+0C095 F0 FC                         BEQ CheckFrameTimer  ; loop; Else frame has INCreased & we can move forward
+0C097                           
+0C097                               ;; Game Logic Goes Here
+0C097 A5 00                         LDA playerY
+0C099 8D 00 02                      STA $0200    ; store the sprite's y value
+0C09C A5 01                         LDA playerX
+0C09E 8D 03 02                      STA $0203    ; store the sprite's x value
+0C0A1                           
+0C0A1                           
+0C0A1 E6 01                         INC playerX  ; | Every Frame,
+0C0A3 E6 01                         INC playerX  ; | playerX+=2
+0C0A5                           
+0C0A5 4C 91 C0                      JMP MainGameLoop
+0C0A8                           
+0C0A8                           ;; 7. Sub Routines
+0C0A8                           
+0C0A8                           
+0C0A8                           ;; 8. INCludes and data tables
+0C0A8                           
+0C0A8                           MyPalettes:
+0C0A8 0E 05 25 0F 0E 05 25 0F..     .db $0E,$05,$25,$0F,$0E,$05,$25,$0F,$0E,$05,$25,$0F,$0E,$05,$25,$0F  ; background
+0C0B8 0E 05 25 0F 0E 05 25 0F..     .db $0E,$05,$25,$0F,$0E,$05,$25,$0F,$0E,$05,$25,$0F,$0E,$05,$25,$0F  ; sprites
+0C0C8                           
+0C0C8                           
+0C0C8                           ;; 9. The Vectors (last few bytes of the ROM file)
+0C0C8                           ;;                Determine the location of: Reset, NMI, (& other interupts)
+0C0C8                           
+0C0C8 00 00 00 00 00 00 00 00..     .org $fffa  ; sets us up at the very end of the code.
+0FFFA 56 C0                         .dw NMI     ; NMI points to label NMI
 0FFFC 00 C0                         .dw RESET   ; Reset points to label RESET
 0FFFE 00 00                         .dw 00
+10000                           
+10000                               ;; load the sprite(s)
+10000 7C 7E 66 99 A1 7E 3C 18..     .INCbin "Player.chr"

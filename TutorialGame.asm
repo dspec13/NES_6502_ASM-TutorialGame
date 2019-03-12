@@ -11,8 +11,11 @@
 ;; 2. Constants and Variables
     .enum $0000  ; This is the Zero Page
 
-        ; variables will eventually go here
+    ; variables will eventually go here
+    playerY .dsb 1     ; playerX (sprite's x pos) is 1 byte in length
+    playerX .dsb 1     ; playerY (sprite's y pos)
 
+    frameTimer .dsb 1  ; declare frameTimer variablw
     .ende
 
 ;; 3. Set the starting point fot the code
@@ -41,7 +44,7 @@ vBlankWait1:
 
     ;; CLEAR OUT MEMORY & STUFF HERE
     LDA #$00  ; Loads 0 into the accumulator
-    LDX #$00  ; Loads 0 into the X register (X will increment through [0, 255])
+    LDX #$00  ; Loads 0 into the X register (X will INCrement through [0, 255])
 ClearMemoryLoop:
     STA $0000, x  ; Stores the accumulator into addr $0000 + x
     STA $0100, x  ; Stores the accumulator into addr $0100 + x
@@ -66,6 +69,11 @@ vBlankWait2:
     LDA #%00011110  ; Loads this binary number into accumulator
     STA $2001       ; Re-Enables rendering
 
+    ;; Set Default value variable values
+    LDA #$80
+    STA playerX
+    STA playerY
+
     ;; At the end of RESET, jump to the Main Game Code
     JMP MainGameLoop
 
@@ -83,12 +91,29 @@ NMI:
 
     ;;===================
     ;; DO NMI STUFF HERE
+
+    INC frameTimer  ; frameTimer++ every time NMI is hit
+
     ;; Transfer sprites to PPU
     LDA $00
     STA $2003  ; sets the low byte of the sprite RAM address
     LDA #$02
     STA $4014  ; sets high byte of the sprite RAM addr
                ; sprite RAM addr: $0200 (16-bit addr)
+
+    ;; load palattes (Palette tables are defined in Section 8)
+    LDA $2002
+    LDA #$3F
+    STA $2006
+    LDA #$00
+    STA $2006
+    LDX #$00
+LoadPalettesLoop:
+    LDA MyPalettes, x    ; Load whatever value from the table that x equals
+    STA $2007            ; Store it to the addr that handles palettes.
+    INX                  ; X++
+    CPX #$20             ; Compare X to 32 (8 banks * 4 colors)
+    BNE LoadPalettesLoop  ; Loop while X != 32
 
     ;; Re-Enable Things
     LDA #%10010000  ; Re-Enable NMI
@@ -110,15 +135,32 @@ NMI:
 
 ;; 6. The Main Game Loop
 MainGameLoop:
-    ;; This is where all game logic will go
+    ;; Regulate Frames
+    LDA frameTimer
+CheckFrameTimer:
+    CMP frameTimer       ; if frameTimer is the same...
+    BEQ CheckFrameTimer  ; loop; Else frame has INCreased & we can move forward
+
+    ;; Game Logic Goes Here
+    LDA playerY
+    STA $0200    ; store the sprite's y value
+    LDA playerX
+    STA $0203    ; store the sprite's x value
+
+
+    INC playerX  ; | Every Frame,
+    INC playerX  ; | playerX+=2
 
     JMP MainGameLoop
 
 ;; 7. Sub Routines
 
 
-;; 8. Includes and data tables
+;; 8. INCludes and data tables
 
+MyPalettes:
+    .db $0E,$05,$25,$0F,$0E,$05,$25,$0F,$0E,$05,$25,$0F,$0E,$05,$25,$0F  ; background
+    .db $0E,$05,$25,$0F,$0E,$05,$25,$0F,$0E,$05,$25,$0F,$0E,$05,$25,$0F  ; sprites
 
 
 ;; 9. The Vectors (last few bytes of the ROM file)
@@ -128,3 +170,6 @@ MainGameLoop:
     .dw NMI     ; NMI points to label NMI
     .dw RESET   ; Reset points to label RESET
     .dw 00
+
+    ;; load the sprite(s)
+    .INCbin "Player.chr"
