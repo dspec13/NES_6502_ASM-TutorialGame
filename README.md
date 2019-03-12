@@ -1,2 +1,3 @@
-# NES_6502_ASM-TutorialGame
-Tutorial Game to teach myself how to use 6502 Assembly to program games for the Nintendo Entertainment System.
+# Development Branch
+
+This branch is for Active Experimentation and Development. Please see the [master branch](https://github.com/dspec13/NES_6502_ASM-TutorialGame/tree/master) for the most stable version.
